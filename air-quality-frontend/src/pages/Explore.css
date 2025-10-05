@@ -1,0 +1,462 @@
+.explore-page {
+  min-height: 100vh;
+  position: relative;
+}
+
+.explore-container {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2rem;
+  margin-top: 2rem;
+  max-width: 800px;
+  margin-left: auto;
+  margin-right: auto;
+  padding: 0 2rem;
+}
+
+.prediction-form-container {
+  width: 100%;
+  max-width: 600px;
+  position: relative;
+  margin-bottom: 3rem;
+}
+
+.prediction-form {
+  display: flex;
+  flex-direction: column;
+  gap: 1rem;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 1rem;
+}
+
+.prediction-results {
+  display: flex;
+  flex-direction: column;
+  gap: 2rem;
+  align-items: center;
+  justify-content: center;
+}
+
+.prediction-card {
+  background: rgba(0, 212, 255, 0.05);
+  border: 2px solid rgba(0, 212, 255, 0.2);
+  width: 100%;
+  max-width: 600px;
+  margin: 0 auto;
+}
+
+.prediction-main {
+  text-align: center;
+  padding: 2rem;
+  background: rgba(0, 212, 255, 0.1);
+  border-radius: 15px;
+  margin-bottom: 2rem;
+}
+
+.prediction-label {
+  font-family: 'Orbitron', monospace;
+  font-size: 3rem;
+  font-weight: 900;
+  margin-bottom: 1rem;
+  text-shadow: 0 0 20px currentColor;
+}
+
+.prediction-confidence {
+  font-size: 1.5rem;
+  color: #00d4ff;
+  font-weight: 600;
+}
+
+.model-info {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 1.5rem;
+  border-radius: 10px;
+  margin-bottom: 2rem;
+}
+
+.model-info h3 {
+  color: #00d4ff;
+  margin-bottom: 1rem;
+  font-family: 'Orbitron', monospace;
+}
+
+.model-info p {
+  margin-bottom: 0.5rem;
+  color: #cccccc;
+}
+
+.chart-container {
+  background: rgba(255, 255, 255, 0.05);
+  padding: 2rem;
+  border-radius: 15px;
+  margin-bottom: 2rem;
+}
+
+.chart-container h3 {
+  color: #00d4ff;
+  margin-bottom: 1.5rem;
+  font-family: 'Orbitron', monospace;
+  text-align: center;
+}
+
+/* AQI Status Colors */
+.aqi-good {
+  color: #00ff00;
+  text-shadow: 0 0 20px rgba(0, 255, 0, 0.8);
+}
+
+.aqi-normal {
+  color: #ffff00;
+  text-shadow: 0 0 20px rgba(255, 255, 0, 0.8);
+}
+
+.aqi-bad {
+  color: #ff8800;
+  text-shadow: 0 0 20px rgba(255, 136, 0, 0.8);
+}
+
+.aqi-very-bad {
+  color: #ff0000;
+  text-shadow: 0 0 20px rgba(255, 0, 0, 0.8);
+}
+
+/* Loading Animation */
+.loading {
+  display: inline-block;
+  width: 20px;
+  height: 20px;
+  border: 3px solid rgba(255, 255, 255, 0.3);
+  border-radius: 50%;
+  border-top-color: #00d4ff;
+  animation: spin 1s ease-in-out infinite;
+  margin-right: 10px;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Error Messages */
+.error {
+  color: #ff4444;
+  background: rgba(255, 68, 68, 0.1);
+  border: 1px solid #ff4444;
+  border-radius: 8px;
+  padding: 1rem;
+  margin: 1rem 0;
+  text-align: center;
+}
+
+/* Responsive Design */
+@media (max-width: 1024px) {
+  .explore-container {
+    grid-template-columns: 1fr;
+    gap: 2rem;
+  }
+  
+  .prediction-form-container {
+    position: static;
+  }
+}
+
+/* When prediction results are shown, adjust layout */
+.explore-container.has-results {
+  max-width: 1000px;
+}
+
+.explore-container.has-results .prediction-form-container {
+  margin-bottom: 2rem;
+}
+
+.explore-container.has-results .prediction-results {
+  width: 100%;
+}
+
+@media (max-width: 768px) {
+  .form-row {
+    grid-template-columns: 1fr;
+  }
+  
+  .prediction-label {
+    font-size: 2rem;
+  }
+  
+  .prediction-confidence {
+    font-size: 1.2rem;
+  }
+  
+  .chart-container {
+    padding: 1rem;
+  }
+  
+  .loading-circle {
+    width: 150px;
+    height: 150px;
+  }
+  
+  .loading-text {
+    font-size: 1.4rem;
+  }
+}
+
+/* Form Enhancements */
+.form-input:focus {
+  outline: none;
+  border-color: #00d4ff;
+  box-shadow: 0 0 15px rgba(0, 212, 255, 0.3);
+  background: rgba(0, 212, 255, 0.05);
+}
+
+.form-input:hover {
+  border-color: rgba(0, 212, 255, 0.5);
+}
+
+/* Button Enhancements */
+.btn:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+  transform: none;
+}
+
+.btn:disabled:hover {
+  transform: none;
+  box-shadow: none;
+}
+
+/* Chart Styling */
+.recharts-tooltip-wrapper {
+  outline: none;
+}
+
+.recharts-default-tooltip {
+  background: rgba(0, 0, 0, 0.9) !important;
+  border: 1px solid #00d4ff !important;
+  border-radius: 8px !important;
+  color: #ffffff !important;
+}
+
+.recharts-tooltip-label {
+  color: #00d4ff !important;
+  font-weight: bold;
+}
+
+.recharts-tooltip-item {
+  color: #ffffff !important;
+}
+
+/* Sample Data Info */
+.sample-data-info {
+  background: rgba(0, 212, 255, 0.1);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: 10px;
+  padding: 1rem;
+  margin-bottom: 1.5rem;
+  text-align: center;
+}
+
+.sample-data-info p {
+  color: #00d4ff;
+  font-family: 'Inter', sans-serif;
+  font-size: 0.9rem;
+  margin: 0;
+  font-weight: 500;
+}
+
+/* Countdown Overlay */
+.countdown-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 20, 40, 0.9);
+  backdrop-filter: blur(15px);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.countdown-container {
+  text-align: center;
+  position: relative;
+}
+
+.loading-circle {
+  width: 200px;
+  height: 200px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(0, 191, 255, 0.1) 0%, rgba(0, 100, 200, 0.05) 70%, transparent 100%);
+  border: 3px solid rgba(0, 191, 255, 0.3);
+  box-shadow: 
+    0 0 50px rgba(0, 191, 255, 0.5),
+    inset 0 0 50px rgba(0, 191, 255, 0.1);
+  animation: loadingPulse 2s ease-in-out infinite;
+  position: relative;
+}
+
+.loading-circle::before {
+  content: '';
+  position: absolute;
+  top: -3px;
+  left: -3px;
+  right: -3px;
+  bottom: -3px;
+  border-radius: 50%;
+  border: 3px solid transparent;
+  border-top: 3px solid #00bfff;
+  animation: loadingSpin 1s linear infinite;
+}
+
+.loading-text {
+  font-family: 'Space Grotesk', sans-serif;
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #00bfff;
+  text-shadow: 
+    0 0 20px #00bfff,
+    0 0 40px #00bfff,
+    0 0 60px #00bfff;
+  animation: loadingText 2s ease-in-out infinite;
+}
+
+@keyframes loadingPulse {
+  0% {
+    transform: scale(1);
+    box-shadow: 
+      0 0 50px rgba(0, 191, 255, 0.5),
+      inset 0 0 50px rgba(0, 191, 255, 0.1);
+  }
+  50% {
+    transform: scale(1.05);
+    box-shadow: 
+      0 0 80px rgba(0, 191, 255, 0.8),
+      inset 0 0 80px rgba(0, 191, 255, 0.2);
+  }
+  100% {
+    transform: scale(1);
+    box-shadow: 
+      0 0 50px rgba(0, 191, 255, 0.5),
+      inset 0 0 50px rgba(0, 191, 255, 0.1);
+  }
+}
+
+@keyframes loadingSpin {
+  0% {
+    transform: rotate(0deg);
+  }
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+@keyframes loadingText {
+  0% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  50% {
+    opacity: 0.7;
+    transform: scale(1.05);
+  }
+  100% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+/* Animation for prediction results */
+.prediction-results {
+  animation: slideIn 0.5s ease-out;
+}
+
+@keyframes slideIn {
+  from {
+    opacity: 0;
+    transform: translateY(20px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+/* New prediction layout styles */
+.predictions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+  gap: 2rem;
+  margin-bottom: 2rem;
+}
+
+.prediction-item {
+  background: rgba(0, 212, 255, 0.1);
+  border: 1px solid rgba(0, 212, 255, 0.3);
+  border-radius: 12px;
+  padding: 1.5rem;
+  text-align: center;
+}
+
+.prediction-item h3 {
+  color: #00d4ff;
+  margin-bottom: 1rem;
+  font-size: 1.2rem;
+}
+
+.prediction-value {
+  font-size: 2.5rem;
+  font-weight: bold;
+  margin-bottom: 1rem;
+  padding: 1rem;
+  border-radius: 8px;
+  background: rgba(0, 0, 0, 0.3);
+}
+
+.prediction-value.aqi-good {
+  color: #00ff00;
+  border: 2px solid #00ff00;
+}
+
+.prediction-value.aqi-normal {
+  color: #ffff00;
+  border: 2px solid #ffff00;
+}
+
+.prediction-value.aqi-bad {
+  color: #ff8800;
+  border: 2px solid #ff8800;
+}
+
+.prediction-value.aqi-very-bad {
+  color: #ff0000;
+  border: 2px solid #ff0000;
+}
+
+.prediction-details {
+  color: #cccccc;
+  font-size: 0.9rem;
+}
+
+.prediction-details p {
+  margin: 0.5rem 0;
+}
