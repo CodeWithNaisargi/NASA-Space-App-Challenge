@@ -1,284 +1,394 @@
-"""
-Data Processing and Feature Engineering for Air Quality Prediction
-NASA Space Apps Challenge - Air Quality Prediction Project
-"""
-
 import pandas as pd
 import numpy as np
-from sklearn.preprocessing import StandardScaler, LabelEncoder
+import h5py
+import os
+from datetime import datetime, timedelta
+import joblib
 from sklearn.model_selection import train_test_split
-import matplotlib.pyplot as plt
-import seaborn as sns
+from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
+from sklearn.linear_model import LinearRegression
+from sklearn.preprocessing import StandardScaler
+from sklearn.metrics import mean_squared_error, mean_absolute_error, r2_score
 import warnings
+warnings.filterwarnings('ignore')
 
-warnings.filterwarnings("ignore")
-
-
-class AirQualityProcessor:
-    def __init__(self, csv_path):
-        """Initialize the processor with CSV data path"""
-        self.csv_path = csv_path
-        self.df = None
-        self.scaler = StandardScaler()
-        self.label_encoder = LabelEncoder()
-
-    def load_data(self):
-        """Load and explore the dataset"""
-        print("Loading dataset...")
-        self.df = pd.read_csv(self.csv_path)
-        print(f"Dataset shape: {self.df.shape}")
-        print(f"Columns: {self.df.columns.tolist()}")
-        print(f"Missing values:\n{self.df.isnull().sum()}")
-        return self.df
-
-    def create_aqi_labels(self):
-        """
-        Create air quality classification labels based on AQI standards
-        Using PM2.5 as primary indicator for AQI calculation
-        """
-        print("Creating AQI classification labels...")
-
-        def calculate_aqi_pm25(pm25):
-            """Calculate AQI based on PM2.5 values"""
-            if pm25 <= 25:
-                return 0  # Good
-            elif pm25 <= 50:
-                return 1  # Normal
-            elif pm25 <= 100:
-                return 2  # Bad
+class AirQualityDataProcessor:
+    def __init__(self):
+        self.ground_data = None
+        self.satellite_data = None
+        self.ground_model = None
+        self.satellite_model = None
+        self.ground_scaler = StandardScaler()
+        self.satellite_scaler = StandardScaler()
+        
+    def process_ground_data(self, csv_file_path):
+        """Process ground sensor data - extract last 1 year and clean"""
+        print("Processing ground sensor data...")
+        
+        # Read the CSV file
+        df = pd.read_csv(csv_file_path)
+        
+        # Convert date column to datetime
+        if 'date' in df.columns:
+            df['date'] = pd.to_datetime(df['date'])
+        elif 'Date' in df.columns:
+            df['date'] = pd.to_datetime(df['Date'])
+        else:
+            # Try to find date column
+            date_cols = [col for col in df.columns if 'date' in col.lower() or 'time' in col.lower()]
+            if date_cols:
+                df['date'] = pd.to_datetime(df[date_cols[0]])
             else:
-                return 3  # Very Bad
-
-        def calculate_aqi_pm10(pm10):
-            """Calculate AQI based on PM10 values"""
-            if pm10 <= 50:
-                return 0  # Good
-            elif pm10 <= 100:
-                return 1  # Normal
-            elif pm10 <= 200:
-                return 2  # Bad
-            else:
-                return 3  # Very Bad
-
-        # Calculate AQI for both PM2.5 and PM10, take the maximum
-        aqi_pm25 = self.df["pm2_5"].apply(calculate_aqi_pm25)
-        aqi_pm10 = self.df["pm10"].apply(calculate_aqi_pm10)
-
-        # Take the maximum AQI value (worst air quality)
-        self.df["aqi_class"] = np.maximum(aqi_pm25, aqi_pm10)
-
-        # Create readable labels
-        aqi_labels = {0: "Good", 1: "Normal", 2: "Bad", 3: "Very Bad"}
-        self.df["aqi_label"] = self.df["aqi_class"].map(aqi_labels)
-
-        print("AQI Classification Distribution:")
-        print(self.df["aqi_label"].value_counts())
-        print(f"\nAQI Class Distribution:")
-        print(self.df["aqi_class"].value_counts().sort_index())
-
-        return self.df
-
-    def feature_engineering(self):
-        """Create additional features for better prediction"""
-        print("Creating additional features...")
-
-        # Convert date to datetime
-        self.df["date"] = pd.to_datetime(self.df["date"])
-
-        # Extract time-based features
-        self.df["hour"] = self.df["date"].dt.hour
-        self.df["day_of_week"] = self.df["date"].dt.dayofweek
-        self.df["month"] = self.df["date"].dt.month
-        self.df["day_of_year"] = self.df["date"].dt.dayofyear
-
-        # Create cyclical features for time
-        self.df["hour_sin"] = np.sin(2 * np.pi * self.df["hour"] / 24)
-        self.df["hour_cos"] = np.cos(2 * np.pi * self.df["hour"] / 24)
-        self.df["day_sin"] = np.sin(2 * np.pi * self.df["day_of_week"] / 7)
-        self.df["day_cos"] = np.cos(2 * np.pi * self.df["day_of_week"] / 7)
-        self.df["month_sin"] = np.sin(2 * np.pi * self.df["month"] / 12)
-        self.df["month_cos"] = np.cos(2 * np.pi * self.df["month"] / 12)
-
-        # Create pollutant ratios
-        self.df["pm_ratio"] = self.df["pm2_5"] / (
-            self.df["pm10"] + 1e-8
-        )  # Avoid division by zero
-        self.df["nox_ratio"] = self.df["no2"] / (self.df["no"] + 1e-8)
-
-        # Create rolling averages (if we had more data, we'd use this)
-        # For now, we'll create some statistical features
-        self.df["co_log"] = np.log1p(self.df["co"])
-        self.df["pm2_5_log"] = np.log1p(self.df["pm2_5"])
-        self.df["pm10_log"] = np.log1p(self.df["pm10"])
-
-        print("Additional features created successfully!")
-        return self.df
-
-    def prepare_features(self):
-        """Prepare features for machine learning"""
-        print("Preparing features for ML...")
-
-        # Select features for training
-        feature_columns = [
-            "co",
-            "no",
-            "no2",
-            "o3",
-            "so2",
-            "pm2_5",
-            "pm10",
-            "nh3",
-            "hour",
-            "day_of_week",
-            "month",
-            "day_of_year",
-            "hour_sin",
-            "hour_cos",
-            "day_sin",
-            "day_cos",
-            "month_sin",
-            "month_cos",
-            "pm_ratio",
-            "nox_ratio",
-            "co_log",
-            "pm2_5_log",
-            "pm10_log",
-        ]
-
-        self.X = self.df[feature_columns]
-        self.y = self.df["aqi_class"]
-
-        print(f"Feature matrix shape: {self.X.shape}")
-        print(f"Target vector shape: {self.y.shape}")
-        print(f"Features: {feature_columns}")
-
-        return self.X, self.y
-
-    def split_and_scale_data(self, test_size=0.2, random_state=42):
-        """Split data into train/test sets and scale features"""
-        print("Splitting and scaling data...")
-
-        # Split the data
-        self.X_train, self.X_test, self.y_train, self.y_test = train_test_split(
-            self.X,
-            self.y,
-            test_size=test_size,
-            random_state=random_state,
-            stratify=self.y,
-        )
-
-        # Scale the features
-        self.X_train_scaled = self.scaler.fit_transform(self.X_train)
-        self.X_test_scaled = self.scaler.transform(self.X_test)
-
-        print(f"Training set shape: {self.X_train_scaled.shape}")
-        print(f"Test set shape: {self.X_test_scaled.shape}")
-
-        return (
-            self.X_train_scaled,
-            self.X_test_scaled,
-            self.y_train,
-            self.y_test,
-            self.scaler,
-        )
-
-    def visualize_data(self):
-        """Create visualizations for data exploration"""
-        print("Creating data visualizations...")
-
-        # Set up the plotting style
-        plt.style.use("dark_background")
-        fig, axes = plt.subplots(2, 2, figsize=(15, 12))
-        fig.suptitle("Air Quality Data Analysis", fontsize=16, color="white")
-
-        # AQI Distribution
-        axes[0, 0].pie(
-            self.df["aqi_label"].value_counts().values,
-            labels=self.df["aqi_label"].value_counts().index,
-            autopct="%1.1f%%",
-            colors=["green", "yellow", "orange", "red"],
-        )
-        axes[0, 0].set_title("AQI Classification Distribution", color="white")
-
-        # PM2.5 vs PM10 scatter plot
-        scatter = axes[0, 1].scatter(
-            self.df["pm2_5"],
-            self.df["pm10"],
-            c=self.df["aqi_class"],
-            cmap="RdYlGn_r",
-            alpha=0.6,
-        )
-        axes[0, 1].set_xlabel("PM2.5 (μg/m³)", color="white")
-        axes[0, 1].set_ylabel("PM10 (μg/m³)", color="white")
-        axes[0, 1].set_title("PM2.5 vs PM10 by AQI Class", color="white")
-        axes[0, 1].tick_params(colors="white")
-        plt.colorbar(scatter, ax=axes[0, 1])
-
-        # Hourly distribution
-        hourly_aqi = self.df.groupby("hour")["aqi_class"].mean()
-        axes[1, 0].plot(hourly_aqi.index, hourly_aqi.values, marker="o", color="cyan")
-        axes[1, 0].set_xlabel("Hour of Day", color="white")
-        axes[1, 0].set_ylabel("Average AQI Class", color="white")
-        axes[1, 0].set_title("Average AQI by Hour", color="white")
-        axes[1, 0].tick_params(colors="white")
-        axes[1, 0].grid(True, alpha=0.3)
-
-        # Monthly distribution
-        monthly_aqi = self.df.groupby("month")["aqi_class"].mean()
-        axes[1, 1].bar(monthly_aqi.index, monthly_aqi.values, color="lightblue")
-        axes[1, 1].set_xlabel("Month", color="white")
-        axes[1, 1].set_ylabel("Average AQI Class", color="white")
-        axes[1, 1].set_title("Average AQI by Month", color="white")
-        axes[1, 1].tick_params(colors="white")
-
-        plt.tight_layout()
-        plt.savefig(
-            "data_analysis.png",
-            dpi=300,
-            bbox_inches="tight",
-            facecolor="black",
-            edgecolor="none",
-        )
-        plt.show()
-
-        print("Visualizations saved as 'data_analysis.png'")
-
-    def get_processed_data(self):
-        """Get all processed data for model training"""
-        return {
-            "X_train": self.X_train_scaled,
-            "X_test": self.X_test_scaled,
-            "y_train": self.y_train,
-            "y_test": self.y_test,
-            "scaler": self.scaler,
-            "feature_names": self.X.columns.tolist(),
-            "aqi_labels": {0: "Good", 1: "Normal", 2: "Bad", 3: "Very Bad"},
-        }
-
+                raise ValueError("No date column found in the dataset")
+        
+        # Sort by date
+        df = df.sort_values('date')
+        
+        # Get the last 1 year of data
+        latest_date = df['date'].max()
+        one_year_ago = latest_date - timedelta(days=365)
+        df = df[df['date'] >= one_year_ago].copy()
+        
+        print(f"Ground data shape after filtering: {df.shape}")
+        print(f"Date range: {df['date'].min()} to {df['date'].max()}")
+        
+        # Clean the data
+        # Remove rows with all NaN values
+        df = df.dropna(how='all')
+        
+        # Handle missing values in numeric columns
+        numeric_columns = df.select_dtypes(include=[np.number]).columns
+        for col in numeric_columns:
+            if col != 'date':
+                # Fill missing values with median
+                df[col] = df[col].fillna(df[col].median())
+        
+        # Create additional features
+        df['year'] = df['date'].dt.year
+        df['month'] = df['date'].dt.month
+        df['day'] = df['date'].dt.day
+        df['day_of_week'] = df['date'].dt.dayofweek
+        df['hour'] = df['date'].dt.hour
+        
+        # Cyclical encoding for time features
+        df['month_sin'] = np.sin(2 * np.pi * df['month'] / 12)
+        df['month_cos'] = np.cos(2 * np.pi * df['month'] / 12)
+        df['day_sin'] = np.sin(2 * np.pi * df['day'] / 31)
+        df['day_cos'] = np.cos(2 * np.pi * df['day'] / 31)
+        df['hour_sin'] = np.sin(2 * np.pi * df['hour'] / 24)
+        df['hour_cos'] = np.cos(2 * np.pi * df['hour'] / 24)
+        
+        self.ground_data = df
+        print("Ground data processing completed!")
+        return df
+    
+    def process_satellite_data(self, h5_directory):
+        """Process NASA satellite data - extract SO2, lat, lon, timestamps"""
+        print("Processing satellite data...")
+        
+        satellite_data = []
+        
+        # Process all HDF5 files in the directory
+        for filename in os.listdir(h5_directory):
+            if filename.endswith('.h5'):
+                file_path = os.path.join(h5_directory, filename)
+                try:
+                    with h5py.File(file_path, 'r') as f:
+                        # Extract SO2 data and coordinates
+                        if 'SO2' in f or 'so2' in f:
+                            so2_key = 'SO2' if 'SO2' in f else 'so2'
+                            so2_data = f[so2_key][:]
+                            
+                            # Extract latitude and longitude
+                            lat_data = f['Latitude'][:] if 'Latitude' in f else f['lat'][:]
+                            lon_data = f['Longitude'][:] if 'Longitude' in f else f['lon'][:]
+                            
+                            # Extract timestamps
+                            time_data = f['Time'][:] if 'Time' in f else f['time'][:]
+                            
+                            # Create DataFrame for this file
+                            file_data = pd.DataFrame({
+                                'so2': so2_data.flatten(),
+                                'latitude': lat_data.flatten(),
+                                'longitude': lon_data.flatten(),
+                                'timestamp': time_data.flatten()
+                            })
+                            
+                            # Convert timestamp to datetime
+                            file_data['date'] = pd.to_datetime(file_data['timestamp'], unit='s')
+                            
+                            satellite_data.append(file_data)
+                            
+                except Exception as e:
+                    print(f"Error processing {filename}: {str(e)}")
+                    continue
+        
+        if satellite_data:
+            # Combine all satellite data
+            df = pd.concat(satellite_data, ignore_index=True)
+            
+            # Clean the data
+            df = df.dropna()
+            
+            # Remove outliers (SO2 values > 3 standard deviations from mean)
+            so2_mean = df['so2'].mean()
+            so2_std = df['so2'].std()
+            df = df[abs(df['so2'] - so2_mean) <= 3 * so2_std]
+            
+            # Create additional features
+            df['year'] = df['date'].dt.year
+            df['month'] = df['date'].dt.month
+            df['day'] = df['date'].dt.day
+            df['day_of_week'] = df['date'].dt.dayofweek
+            df['hour'] = df['date'].dt.hour
+            
+            # Cyclical encoding
+            df['month_sin'] = np.sin(2 * np.pi * df['month'] / 12)
+            df['month_cos'] = np.cos(2 * np.pi * df['month'] / 12)
+            df['day_sin'] = np.sin(2 * np.pi * df['day'] / 31)
+            df['day_cos'] = np.cos(2 * np.pi * df['day'] / 31)
+            df['hour_sin'] = np.sin(2 * np.pi * df['hour'] / 24)
+            df['hour_cos'] = np.cos(2 * np.pi * df['hour'] / 24)
+            
+            self.satellite_data = df
+            print(f"Satellite data shape: {df.shape}")
+            print(f"Date range: {df['date'].min()} to {df['date'].max()}")
+            print("Satellite data processing completed!")
+        else:
+            print("No satellite data found!")
+            
+        return self.satellite_data
+    
+    def prepare_7day_prediction_data(self, data, target_column='so2'):
+        """Prepare data for 7-day prediction using last 7 days to predict next 7 days"""
+        print(f"Preparing 7-day prediction data for {target_column}...")
+        
+        # Sort by date
+        data = data.sort_values('date')
+        
+        # Create features for 7-day prediction
+        features = []
+        targets = []
+        
+        # Use last 7 days to predict next 7 days
+        window_size = 7
+        prediction_days = 7
+        
+        for i in range(window_size, len(data) - prediction_days + 1):
+            # Features: last 7 days of data
+            window_data = data.iloc[i-window_size:i]
+            
+            # Create features from the window
+            feature_vector = []
+            
+            # Statistical features from the window
+            feature_vector.extend([
+                window_data[target_column].mean(),
+                window_data[target_column].std(),
+                window_data[target_column].min(),
+                window_data[target_column].max(),
+                window_data[target_column].median()
+            ])
+            
+            # Time features from the last day in window
+            last_day = window_data.iloc[-1]
+            feature_vector.extend([
+                last_day['year'],
+                last_day['month'],
+                last_day['day'],
+                last_day['day_of_week'],
+                last_day['hour'],
+                last_day['month_sin'],
+                last_day['month_cos'],
+                last_day['day_sin'],
+                last_day['day_cos'],
+                last_day['hour_sin'],
+                last_day['hour_cos']
+            ])
+            
+            # Target: next 7 days average
+            next_7_days = data.iloc[i:i+prediction_days]
+            target_value = next_7_days[target_column].mean()
+            
+            features.append(feature_vector)
+            targets.append(target_value)
+        
+        return np.array(features), np.array(targets)
+    
+    def train_models(self):
+        """Train models for both ground and satellite data"""
+        print("Training models...")
+        
+        # Train ground data model
+        if self.ground_data is not None:
+            print("Training ground data model...")
+            X_ground, y_ground = self.prepare_7day_prediction_data(self.ground_data, 'so2')
+            
+            if len(X_ground) > 0:
+                # Scale features
+                X_ground_scaled = self.ground_scaler.fit_transform(X_ground)
+                
+                # Split data
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X_ground_scaled, y_ground, test_size=0.2, random_state=42
+                )
+                
+                # Train multiple models and select the best
+                models = {
+                    'RandomForest': RandomForestRegressor(n_estimators=100, random_state=42),
+                    'GradientBoosting': GradientBoostingRegressor(n_estimators=100, random_state=42),
+                    'LinearRegression': LinearRegression()
+                }
+                
+                best_model = None
+                best_score = -np.inf
+                best_name = ""
+                
+                for name, model in models.items():
+                    model.fit(X_train, y_train)
+                    y_pred = model.predict(X_test)
+                    r2 = r2_score(y_test, y_pred)
+                    
+                    print(f"{name} - R² Score: {r2:.4f}")
+                    
+                    if r2 > best_score:
+                        best_score = r2
+                        best_model = model
+                        best_name = name
+                
+                self.ground_model = best_model
+                print(f"Best ground model: {best_name} with R² = {best_score:.4f}")
+                
+                # Save the model and scaler
+                joblib.dump(self.ground_model, 'ground_model.pkl')
+                joblib.dump(self.ground_scaler, 'ground_scaler.pkl')
+        
+        # Train satellite data model
+        if self.satellite_data is not None:
+            print("Training satellite data model...")
+            X_satellite, y_satellite = self.prepare_7day_prediction_data(self.satellite_data, 'so2')
+            
+            if len(X_satellite) > 0:
+                # Scale features
+                X_satellite_scaled = self.satellite_scaler.fit_transform(X_satellite)
+                
+                # Split data
+                X_train, X_test, y_train, y_test = train_test_split(
+                    X_satellite_scaled, y_satellite, test_size=0.2, random_state=42
+                )
+                
+                # Train multiple models and select the best
+                models = {
+                    'RandomForest': RandomForestRegressor(n_estimators=100, random_state=42),
+                    'GradientBoosting': GradientBoostingRegressor(n_estimators=100, random_state=42),
+                    'LinearRegression': LinearRegression()
+                }
+                
+                best_model = None
+                best_score = -np.inf
+                best_name = ""
+                
+                for name, model in models.items():
+                    model.fit(X_train, y_train)
+                    y_pred = model.predict(X_test)
+                    r2 = r2_score(y_test, y_pred)
+                    
+                    print(f"{name} - R² Score: {r2:.4f}")
+                    
+                    if r2 > best_score:
+                        best_score = r2
+                        best_model = model
+                        best_name = name
+                
+                self.satellite_model = best_model
+                print(f"Best satellite model: {best_name} with R² = {best_score:.4f}")
+                
+                # Save the model and scaler
+                joblib.dump(self.satellite_model, 'satellite_model.pkl')
+                joblib.dump(self.satellite_scaler, 'satellite_scaler.pkl')
+    
+    def predict_next_7_days(self, data_type='ground'):
+        """Predict next 7 days using the last 7 days of data"""
+        if data_type == 'ground' and self.ground_data is not None:
+            data = self.ground_data
+            model = self.ground_model
+            scaler = self.ground_scaler
+        elif data_type == 'satellite' and self.satellite_data is not None:
+            data = self.satellite_data
+            model = self.satellite_model
+            scaler = self.satellite_scaler
+        else:
+            return None
+        
+        # Get the last 7 days of data
+        last_7_days = data.tail(7)
+        
+        # Create feature vector
+        feature_vector = []
+        
+        # Statistical features from the last 7 days
+        feature_vector.extend([
+            last_7_days['so2'].mean(),
+            last_7_days['so2'].std(),
+            last_7_days['so2'].min(),
+            last_7_days['so2'].max(),
+            last_7_days['so2'].median()
+        ])
+        
+        # Time features from the last day
+        last_day = last_7_days.iloc[-1]
+        feature_vector.extend([
+            last_day['year'],
+            last_day['month'],
+            last_day['day'],
+            last_day['day_of_week'],
+            last_day['hour'],
+            last_day['month_sin'],
+            last_day['month_cos'],
+            last_day['day_sin'],
+            last_day['day_cos'],
+            last_day['hour_sin'],
+            last_day['hour_cos']
+        ])
+        
+        # Scale features and predict
+        feature_vector = np.array(feature_vector).reshape(1, -1)
+        feature_vector_scaled = scaler.transform(feature_vector)
+        prediction = model.predict(feature_vector_scaled)[0]
+        
+        return prediction
 
 def main():
-    """Main function to process the data"""
-    # Initialize processor
-    processor = AirQualityProcessor("delhi_aqi.csv")
-
-    # Load and process data
-    processor.load_data()
-    processor.create_aqi_labels()
-    processor.feature_engineering()
-    processor.prepare_features()
-    processor.split_and_scale_data()
-    processor.visualize_data()
-
-    # Get processed data
-    processed_data = processor.get_processed_data()
-
-    print("\nData processing completed successfully!")
-    print(f"Training samples: {processed_data['X_train'].shape[0]}")
-    print(f"Test samples: {processed_data['X_test'].shape[0]}")
-    print(f"Number of features: {processed_data['X_train'].shape[1]}")
-
-    return processed_data
-
+    processor = AirQualityDataProcessor()
+    
+    # Process ground data (assuming you have a CSV file)
+    # You'll need to provide the path to your ground sensor CSV file
+    ground_csv_path = "ground_sensor_data.csv"  # Update this path
+    
+    if os.path.exists(ground_csv_path):
+        processor.process_ground_data(ground_csv_path)
+    else:
+        print("Ground sensor data file not found. Please provide the correct path.")
+    
+    # Process satellite data
+    satellite_data_path = "data/NASAdata"  # Update this path
+    
+    if os.path.exists(satellite_data_path):
+        processor.process_satellite_data(satellite_data_path)
+    else:
+        print("Satellite data directory not found. Please provide the correct path.")
+    
+    # Train models
+    processor.train_models()
+    
+    # Make predictions
+    if processor.ground_model is not None:
+        ground_prediction = processor.predict_next_7_days('ground')
+        print(f"Ground data prediction for next 7 days: {ground_prediction:.4f}")
+    
+    if processor.satellite_model is not None:
+        satellite_prediction = processor.predict_next_7_days('satellite')
+        print(f"Satellite data prediction for next 7 days: {satellite_prediction:.4f}")
 
 if __name__ == "__main__":
-    processed_data = main()
+    main()
